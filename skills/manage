@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+SKILLS_SRC="$SCRIPT_DIR"
+GLOBAL_DIR="$HOME/.claude/skills"
+
+# shellcheck source=../lib/symlinks.sh
+source "$REPO_DIR/lib/symlinks.sh"
+
+usage() {
+    cat <<'EOF'
+Usage: ai skills <command> [args]
+
+Commands:
+  publish [skill-name...] [--interactive]
+      Symlink skills from this repo into ~/.claude/skills/
+
+  install <project-root> [skill-name...] [--from <source-dir>] [--interactive]
+      Symlink skills into <project-root>/.claude/skills/
+      Default source: ~/.claude/skills/
+
+  uninstall [skill-name...] [--from <project-root>] [--interactive]
+      Remove managed skill symlinks.
+      --from <project-root>  remove from project (default: remove from global)
+      No skill names          remove all skills managed by this tool
+
+  list [--from <project-root>] [--publishable]
+      List skills.
+      (default)              skills in ~/.claude/skills/
+      --from <project-root>  skills installed in a project
+      --publishable          skills in this repo available to publish
+EOF
+}
+
+parse_flags() {
+    local -n _remaining=$1
+    local -n _filter=$2
+    local -n _from=$3
+    local args=("${@:4}")
+    local i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+        case "${args[$i]}" in
+            --no-interactive)
+                INTERACTIVE=false
+                ;;
+            --from)
+                i=$((i + 1))
+                _from="${args[$i]}"
+                ;;
+            *)
+                _filter+=("${args[$i]}")
+                ;;
+        esac
+        i=$((i + 1))
+    done
+    _remaining=("${_filter[@]+"${_filter[@]}"}")
+}
+
+cmd_publish() {
+    local filter=()
+    local unused=""
+    local i=0
+    local args=("$@")
+    while [[ $i -lt ${#args[@]} ]]; do
+        case "${args[$i]}" in
+            --interactive) INTERACTIVE=true ;;
+            *) filter+=("${args[$i]}") ;;
+        esac
+        i=$((i + 1))
+    done
+
+    mkdir -p "$GLOBAL_DIR"
+
+    local found_any=false
+    for skill_path in "$SKILLS_SRC"/*/; do
+        [[ -f "${skill_path}SKILL.md" ]] || continue
+        found_any=true
+        local name
+        name="$(basename "$skill_path")"
+        name_matches "$name" "${filter[@]+"${filter[@]}"}" || continue
+        do_link "${skill_path%/}" "$GLOBAL_DIR/$name"
+    done
+
+    [[ "$found_any" == true ]] || echo "No skills found in $SKILLS_SRC"
+}
+
+cmd_install() {
+    [[ $# -ge 1 ]] || { echo "Error: project-root required" >&2; echo; usage; exit 1; }
+
+    local project_root="$1"
+    shift
+    local source_dir="$GLOBAL_DIR"
+    local filter=()
+    local i=0
+    local args=("$@")
+    while [[ $i -lt ${#args[@]} ]]; do
+        case "${args[$i]}" in
+            --interactive) INTERACTIVE=true ;;
+            --from)
+                i=$((i + 1))
+                source_dir="${args[$i]}"
+                ;;
+            *) filter+=("${args[$i]}") ;;
+        esac
+        i=$((i + 1))
+    done
+
+    [[ -d "$source_dir" ]] || { echo "Error: source not found: $source_dir" >&2; exit 1; }
+    source_dir="$(cd "$source_dir" && pwd)"
+    project_root="$(cd "$project_root" && pwd)"
+
+    local target_dir="$project_root/.claude/skills"
+    mkdir -p "$target_dir"
+
+    local found_any=false
+    for skill_path in "$source_dir"/*/; do
+        [[ -d "$skill_path" ]] || continue
+        [[ -f "${skill_path}SKILL.md" ]] || continue
+        found_any=true
+        local name
+        name="$(basename "$skill_path")"
+        name_matches "$name" "${filter[@]+"${filter[@]}"}" || continue
+        local target="$target_dir/$name"
+        do_link "${skill_path%/}" "$target"
+        [[ -L "$target" ]] && add_gitignore_entry "$project_root" ".claude/skills/$name"
+    done
+
+    [[ "$found_any" == true ]] || echo "No skills found in $source_dir"
+}
+
+cmd_uninstall() {
+    local project_root=""
+    local filter=()
+    local i=0
+    local args=("$@")
+    while [[ $i -lt ${#args[@]} ]]; do
+        case "${args[$i]}" in
+            --interactive) INTERACTIVE=true ;;
+            --from)
+                i=$((i + 1))
+                project_root="${args[$i]}"
+                ;;
+            *) filter+=("${args[$i]}") ;;
+        esac
+        i=$((i + 1))
+    done
+
+    if [[ -n "$project_root" ]]; then
+        local target_dir="$project_root/.claude/skills"
+        local names=()
+        if [[ ${#filter[@]} -gt 0 ]]; then
+            names=("${filter[@]}")
+        else
+            local entry
+            while IFS= read -r entry; do
+                names+=("$(basename "$entry")")
+            done < <(get_gitignore_managed "$project_root")
+        fi
+
+        local name
+        for name in "${names[@]+"${names[@]}"}"; do
+            local target="$target_dir/$name"
+            do_unlink "$target"
+            [[ ! -L "$target" ]] && remove_gitignore_entry "$project_root" ".claude/skills/$name"
+        done
+    else
+        local names=()
+        if [[ ${#filter[@]} -gt 0 ]]; then
+            names=("${filter[@]}")
+        else
+            local link
+            for link in "$GLOBAL_DIR"/*/; do
+                [[ -L "${link%/}" ]] || continue
+                local link_target
+                link_target="$(readlink "${link%/}")"
+                [[ "$link_target" == "$SKILLS_SRC/"* ]] && names+=("$(basename "$link")")
+            done
+        fi
+
+        local name
+        for name in "${names[@]+"${names[@]}"}"; do
+            do_unlink "$GLOBAL_DIR/$name"
+        done
+    fi
+}
+
+cmd_list() {
+    local project_root=""
+    local publishable=false
+    local i=0
+    local args=("$@")
+    while [[ $i -lt ${#args[@]} ]]; do
+        case "${args[$i]}" in
+            --publishable) publishable=true ;;
+            --from)
+                i=$((i + 1))
+                project_root="${args[$i]}"
+                ;;
+        esac
+        i=$((i + 1))
+    done
+
+    local list_dir
+    if [[ "$publishable" == true ]]; then
+        list_dir="$SKILLS_SRC"
+    elif [[ -n "$project_root" ]]; then
+        project_root="$(cd "$project_root" && pwd)"
+        list_dir="$project_root/.claude/skills"
+    else
+        list_dir="$GLOBAL_DIR"
+    fi
+
+    [[ -d "$list_dir" ]] || { echo "No skills directory at $list_dir"; exit 0; }
+
+    local found_any=false
+    for skill_path in "$list_dir"/*/; do
+        [[ -d "$skill_path" ]] || continue
+        [[ -f "${skill_path}SKILL.md" ]] || continue
+        found_any=true
+        local name
+        name="$(basename "$skill_path")"
+        if [[ -L "${skill_path%/}" ]]; then
+            printf '  %s -> %s\n' "$name" "$(readlink "${skill_path%/}")"
+        else
+            printf '  %s\n' "$name"
+        fi
+    done
+
+    [[ "$found_any" == true ]] || echo "No skills found in $list_dir"
+}
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 0
+fi
+
+cmd="$1"
+shift
+
+case "$cmd" in
+    publish)   cmd_publish "$@" ;;
+    install)   cmd_install "$@" ;;
+    uninstall) cmd_uninstall "$@" ;;
+    list)      cmd_list "$@" ;;
+    *) echo "Error: unknown command '$cmd'" >&2; echo; usage; exit 1 ;;
+esac

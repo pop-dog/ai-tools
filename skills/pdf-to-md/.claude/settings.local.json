@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x /home/popdog/projects/pdf-to-md/setup.sh)"
+    ]
+  }
+}

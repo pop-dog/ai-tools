@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: ai <resource> <command> [args]"
+    echo ""
+    echo "Available resources:"
+    for manage in "$REPO_DIR"/*/manage; do
+        [[ -x "$manage" ]] || continue
+        echo "  $(basename "$(dirname "$manage")")"
+    done
+    exit 0
+fi
+
+resource="$1"
+shift
+
+manage="$REPO_DIR/$resource/manage"
+
+if [[ ! -x "$manage" ]]; then
+    echo "Error: unknown resource '$resource'" >&2
+    echo "Run 'ai' with no arguments to see available resources." >&2
+    exit 1
+fi
+
+exec "$manage" "$@"
