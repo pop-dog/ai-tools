@@ -52,6 +52,22 @@ _Avoid_: source directory, local agents
 The `.claude/agents/` subdirectory of a project root. Contains agent files symlinked from the global agents store for use by that project.
 _Avoid_: installed agents directory, project agents
 
+**Orchestrator**:
+The main agent in a multi-agent skill that coordinates subagents, exercises judgment on their output, and decides when the result is acceptable.
+_Avoid_: main agent, coordinator, controller
+
+**Worker**:
+A subagent spawned by an Orchestrator to produce or transform an artifact.
+_Avoid_: generator, creator, writer (use Worker for the role; task-specific names are fine within a skill's own docs)
+
+**Validator**:
+A subagent spawned by an Orchestrator to evaluate a Worker's output against defined quality criteria.
+_Avoid_: reviewer, checker, auditor (use Validator for the role; task-specific names are fine within a skill's own docs)
+
+**Verdict**:
+The structured output of a Validator: either `PASS` or `REVISE`, accompanied by a list of findings each tagged `blocking` or `nit`. The Orchestrator acts on blocking findings; nits are advisory.
+_Avoid_: review, feedback, result
+
 ## Relationships
 
 - A **Skill** lives in exactly one location at a time: a **Project Skills Directory**, the **Global Store**, or a **Local Skills Directory**

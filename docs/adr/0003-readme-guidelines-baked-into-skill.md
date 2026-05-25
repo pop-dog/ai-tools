@@ -1,0 +1,3 @@
+# README quality guidelines are baked into the skill, not fetched at runtime
+
+The generate-readme skill embeds its README quality guidelines directly in SKILL.md rather than fetching the awesome-readme list at runtime. We synthesized a concrete guideline set from a sampling of those examples during design, then fixed it in the skill. The alternative — fetching and re-deriving guidelines on each invocation — would make the skill slower, fragile against network failures or upstream changes, and non-deterministic across runs. The trade-off is that guidelines go stale without a deliberate skill update, but that is preferable to a skill that fails or drifts silently at runtime.
