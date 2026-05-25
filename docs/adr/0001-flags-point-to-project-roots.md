@@ -1,0 +1,3 @@
+# --from and --to flags always point to project roots
+
+The `--from` and `--to` flags on `publish`, `install`, `uninstall`, and `list` always accept a project root directory. The tool is responsible for resolving the correct subdirectory: `skills/` for publish sources, `.claude/skills/` for install targets. We chose this over accepting the subdirectory path directly so that the flags carry a consistent semantic ("point at a project") regardless of which command uses them. The alternative — accepting skill directory paths directly — would make `--from /proj/skills` work for publish but `--from /proj/.claude/skills` work for install, forcing callers to know the internal layout.

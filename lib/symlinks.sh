@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Shared symlink and gitignore logic for ai resource manage scripts.
 # Source this file; do not execute it directly.
-
+#
+# Override these before sourcing or after sourcing to customise per-resource:
 GITIGNORE_COMMENT="# Claude skills (managed by 'ai skills install')"
+GITIGNORE_PATH_PREFIX=".claude/skills/"
 INTERACTIVE=false
 
 prompt_yes() {
@@ -101,7 +103,7 @@ remove_gitignore_entry() {
     mv "$tmp" "$gitignore"
 
     # Remove comment header if no more managed entries remain
-    if ! grep -qF '.claude/skills/' "$gitignore" 2>/dev/null; then
+    if ! grep -qF "$GITIGNORE_PATH_PREFIX" "$gitignore" 2>/dev/null; then
         tmp="$(mktemp)"
         grep -vxF "$GITIGNORE_COMMENT" "$gitignore" > "$tmp" || true
         mv "$tmp" "$gitignore"

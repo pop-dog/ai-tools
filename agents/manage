@@ -3,47 +3,49 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-GLOBAL_DIR="$HOME/.claude/skills"
+GLOBAL_DIR="$HOME/.claude/agents"
 
 # shellcheck source=../lib/symlinks.sh
 source "$REPO_DIR/lib/symlinks.sh"
+GITIGNORE_COMMENT="# Claude agents (managed by 'ai agents install')"
+GITIGNORE_PATH_PREFIX=".claude/agents/"
 
 usage() {
     cat <<'EOF'
-Usage: ai skills <command> [args]
+Usage: ai agents <command> [args]
 
 Commands:
-  publish [skill-name...] [--from <project-root>] [--all | --interactive]
-      Symlink skills from <project-root>/skills/ into ~/.claude/skills/
+  publish [agent-name...] [--from <project-root>] [--all | --interactive]
+      Symlink agents from <project-root>/agents/ into ~/.claude/agents/
       Default source: current working directory
-      --all            publish all available skills without prompting
-      --interactive    prompt for each skill
+      --all            publish all available agents without prompting
+      --interactive    prompt for each agent
 
-  install [skill-name...] [--to <project-root>] [--all | --interactive]
-      Symlink skills from ~/.claude/skills/ into <project-root>/.claude/skills/
+  install [agent-name...] [--to <project-root>] [--all | --interactive]
+      Symlink agents from ~/.claude/agents/ into <project-root>/.claude/agents/
       Default target: current working directory
-      --all            install all available skills without prompting
-      --interactive    prompt for each skill
+      --all            install all available agents without prompting
+      --interactive    prompt for each agent
 
-  uninstall [skill-name...] [--from <project-root>] [--all | --interactive]
-      Remove skill symlinks from <project-root>/.claude/skills/
+  uninstall [agent-name...] [--from <project-root>] [--all | --interactive]
+      Remove agent symlinks from <project-root>/.claude/agents/
       Default target: current working directory
-      --all            remove all installed skills without prompting
-      --interactive    prompt for each skill
+      --all            remove all installed agents without prompting
+      --interactive    prompt for each agent
 
   list [--publishable | --installable] [--from <project-root>] [--to <project-root>]
       --publishable            diff: what can be published from the current project
         --from <project-root>  use alternate project as source
       --installable            diff: what can be installed into the current project
         --to <project-root>    use alternate project as target
-      (default)                list all skills in ~/.claude/skills/
+      (default)                list all agents in ~/.claude/agents/
 EOF
 }
 
 no_args_hint() {
     local cmd="$1"
-    echo "Specify skill names, use --all to $cmd all available skills, or run 'ai skills list' first." >&2
-    echo "Run 'ai skills' for full usage." >&2
+    echo "Specify agent names, use --all to $cmd all available agents, or run 'ai agents list' first." >&2
+    echo "Run 'ai agents' for full usage." >&2
     exit 1
 }
 
@@ -78,26 +80,27 @@ cmd_publish() {
 
     local base_dir
     base_dir="$(resolve_project_root "$project_root_arg")"
-    local skills_src="$base_dir/skills"
+    local agents_src="$base_dir/agents"
 
-    [[ -d "$skills_src" ]] \
-        || { echo "Error: no skills/ directory found in $base_dir" >&2; exit 1; }
+    [[ -d "$agents_src" ]] \
+        || { echo "Error: no agents/ directory found in $base_dir" >&2; exit 1; }
 
     mkdir -p "$GLOBAL_DIR"
 
     local found_any=false
-    for skill_path in "$skills_src"/*/; do
-        [[ -f "${skill_path}SKILL.md" ]] || continue
+    for agent_file in "$agents_src"/*.md; do
+        [[ -f "$agent_file" ]] || continue
         found_any=true
-        local name
-        name="$(basename "$skill_path")"
+        local filename name
+        filename="$(basename "$agent_file")"
+        name="${filename%.md}"
         if [[ "$ALL" == false ]]; then
             name_matches "$name" "${filter[@]+"${filter[@]}"}" || continue
         fi
-        do_link "${skill_path%/}" "$GLOBAL_DIR/$name"
+        do_link "$agent_file" "$GLOBAL_DIR/$filename"
     done
 
-    [[ "$found_any" == true ]] || echo "No skills found in $skills_src"
+    [[ "$found_any" == true ]] || echo "No agents found in $agents_src"
 }
 
 cmd_install() {
@@ -126,25 +129,25 @@ cmd_install() {
     [[ -d "$GLOBAL_DIR" ]] \
         || { echo "Error: global store not found at $GLOBAL_DIR" >&2; exit 1; }
 
-    local target_dir="$base_dir/.claude/skills"
+    local target_dir="$base_dir/.claude/agents"
     mkdir -p "$target_dir"
 
     local found_any=false
-    for skill_path in "$GLOBAL_DIR"/*/; do
-        [[ -d "$skill_path" ]] || continue
-        [[ -f "${skill_path}SKILL.md" ]] || continue
+    for agent_file in "$GLOBAL_DIR"/*.md; do
+        [[ -f "$agent_file" || -L "$agent_file" ]] || continue
         found_any=true
-        local name
-        name="$(basename "$skill_path")"
+        local filename name
+        filename="$(basename "$agent_file")"
+        name="${filename%.md}"
         if [[ "$ALL" == false ]]; then
             name_matches "$name" "${filter[@]+"${filter[@]}"}" || continue
         fi
-        local target="$target_dir/$name"
-        do_link "${skill_path%/}" "$target"
-        [[ -L "$target" ]] && add_gitignore_entry "$base_dir" ".claude/skills/$name"
+        local target="$target_dir/$filename"
+        do_link "$agent_file" "$target"
+        [[ -L "$target" ]] && add_gitignore_entry "$base_dir" ".claude/agents/$filename"
     done
 
-    [[ "$found_any" == true ]] || echo "No skills found in $GLOBAL_DIR"
+    [[ "$found_any" == true ]] || echo "No agents found in $GLOBAL_DIR"
 }
 
 cmd_uninstall() {
@@ -169,24 +172,27 @@ cmd_uninstall() {
 
     local base_dir
     base_dir="$(resolve_project_root "$project_root_arg")"
-    local target_dir="$base_dir/.claude/skills"
+    local target_dir="$base_dir/.claude/agents"
 
     local names=()
     if [[ ${#filter[@]} -gt 0 ]]; then
         names=("${filter[@]}")
     elif [[ -d "$target_dir" ]]; then
         local link
-        for link in "$target_dir"/*/; do
-            [[ -L "${link%/}" ]] || continue
-            names+=("$(basename "${link%/}")")
+        for link in "$target_dir"/*.md; do
+            [[ -L "$link" ]] || continue
+            local filename name
+            filename="$(basename "$link")"
+            name="${filename%.md}"
+            names+=("$name")
         done
     fi
 
     local name
     for name in "${names[@]+"${names[@]}"}"; do
-        local target="$target_dir/$name"
+        local target="$target_dir/$name.md"
         do_unlink "$target"
-        [[ ! -L "$target" ]] && remove_gitignore_entry "$base_dir" ".claude/skills/$name"
+        [[ ! -L "$target" ]] && remove_gitignore_entry "$base_dir" ".claude/agents/$name.md"
     done
 }
 
@@ -209,18 +215,19 @@ cmd_list() {
     if [[ "$publishable" == true ]]; then
         local base_dir
         base_dir="$(resolve_project_root "$project_root_arg")"
-        local skills_src="$base_dir/skills"
+        local agents_src="$base_dir/agents"
 
-        [[ -d "$skills_src" ]] \
-            || { echo "Error: no skills/ directory found in $base_dir" >&2; exit 1; }
+        [[ -d "$agents_src" ]] \
+            || { echo "Error: no agents/ directory found in $base_dir" >&2; exit 1; }
 
         local already=()
         local available=()
-        for skill_path in "$skills_src"/*/; do
-            [[ -f "${skill_path}SKILL.md" ]] || continue
-            local name
-            name="$(basename "$skill_path")"
-            if [[ -e "$GLOBAL_DIR/$name" ]]; then
+        for agent_file in "$agents_src"/*.md; do
+            [[ -f "$agent_file" ]] || continue
+            local filename name
+            filename="$(basename "$agent_file")"
+            name="${filename%.md}"
+            if [[ -e "$GLOBAL_DIR/$filename" ]]; then
                 already+=("$name")
             else
                 available+=("$name")
@@ -244,19 +251,19 @@ cmd_list() {
     elif [[ "$installable" == true ]]; then
         local base_dir
         base_dir="$(resolve_project_root "$project_root_arg")"
-        local local_dir="$base_dir/.claude/skills"
+        local local_dir="$base_dir/.claude/agents"
 
         [[ -d "$GLOBAL_DIR" ]] \
-            || { echo "No skills in global store ($GLOBAL_DIR)"; exit 0; }
+            || { echo "No agents in global store ($GLOBAL_DIR)"; exit 0; }
 
         local already=()
         local available=()
-        for skill_path in "$GLOBAL_DIR"/*/; do
-            [[ -d "$skill_path" ]] || continue
-            [[ -f "${skill_path}SKILL.md" ]] || continue
-            local name
-            name="$(basename "$skill_path")"
-            if [[ -e "$local_dir/$name" ]]; then
+        for agent_file in "$GLOBAL_DIR"/*.md; do
+            [[ -f "$agent_file" || -L "$agent_file" ]] || continue
+            local filename name
+            filename="$(basename "$agent_file")"
+            name="${filename%.md}"
+            if [[ -e "$local_dir/$filename" ]]; then
                 already+=("$name")
             else
                 available+=("$name")
@@ -279,23 +286,23 @@ cmd_list() {
 
     else
         [[ -d "$GLOBAL_DIR" ]] \
-            || { echo "No skills in global store ($GLOBAL_DIR)"; exit 0; }
+            || { echo "No agents in global store ($GLOBAL_DIR)"; exit 0; }
 
         local found_any=false
-        for skill_path in "$GLOBAL_DIR"/*/; do
-            [[ -d "$skill_path" ]] || continue
-            [[ -f "${skill_path}SKILL.md" ]] || continue
+        for agent_file in "$GLOBAL_DIR"/*.md; do
+            [[ -f "$agent_file" || -L "$agent_file" ]] || continue
             found_any=true
-            local name
-            name="$(basename "$skill_path")"
-            if [[ -L "${skill_path%/}" ]]; then
-                printf '  %s -> %s\n' "$name" "$(readlink "${skill_path%/}")"
+            local filename name
+            filename="$(basename "$agent_file")"
+            name="${filename%.md}"
+            if [[ -L "$agent_file" ]]; then
+                printf '  %s -> %s\n' "$name" "$(readlink "$agent_file")"
             else
                 printf '  %s\n' "$name"
             fi
         done
 
-        [[ "$found_any" == true ]] || echo "No skills found in $GLOBAL_DIR"
+        [[ "$found_any" == true ]] || echo "No agents found in $GLOBAL_DIR"
     fi
 }
 
