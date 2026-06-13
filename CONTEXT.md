@@ -1,56 +1,50 @@
-# ai CLI
+# ai-tools
 
-A command-line tool for managing Claude Code skills across projects and the user's global skill store.
+A catalog of Claude Code skills and agents, installed onto a machine by a single remote script.
 
 ## Language
 
+### Catalog
+
+**Catalog**:
+The set of skills and agents this repo offers, defined by the contents of its `/skills` and `/agents` directories. The Catalog is discovered dynamically — nothing lists it but the directories themselves.
+_Avoid_: registry, index, manifest
+
 **Skill**:
-A directory containing a `SKILL.md` file, representing a single Claude Code agent capability.
+A directory containing a `SKILL.md` file, representing a single Claude Code capability. Always a directory, never a single file.
 _Avoid_: plugin, extension, module
 
-**Global Store**:
-The user-wide skill collection at `~/.claude/skills/`. Skills here are available to be installed into any project.
-_Avoid_: user store, global directory
-
-**Project Skills Directory**:
-The `skills/` subdirectory of a project root. Contains skills that can be published from that project into the global store.
-_Avoid_: source directory, local skills
-
-**Local Skills Directory**:
-The `.claude/skills/` subdirectory of a project root. Contains skills symlinked from the global store for use by that project.
-_Avoid_: installed skills directory, project skills
-
-**Publish**:
-The act of symlinking a skill from a project skills directory into the global store, making it user-wide available.
-_Avoid_: deploy, export, register
-
-**Install**:
-The act of symlinking a skill from the global store into a project's local skills directory, making it available to that project.
-_Avoid_: link, add, import
-
-**Publishable**:
-A skill present in a project's skills directory that is a candidate for publish.
-_Avoid_: available, local
-
-**Installable**:
-A skill present in the global store that is a candidate for install into a project.
-_Avoid_: available, global
-
-**Project Root**:
-The top-level directory of a project. The `--from` and `--to` flags always point to a project root; the tool resolves the correct subdirectory (`skills/` or `.claude/skills/`) from there.
-_Avoid_: base directory, working directory
-
 **Agent**:
-A single `.md` file with YAML frontmatter defining a Claude Code sub-agent's name, description, tools, and system prompt.
+A single `.md` file with YAML frontmatter defining a Claude Code sub-agent's name, description, tools, and system prompt. Always a flat file, never a directory.
 _Avoid_: plugin, bot, assistant
 
-**Project Agents Directory**:
-The `agents/` subdirectory of a project root. Contains agents that can be published from that project into the global agents store.
-_Avoid_: source directory, local agents
+### Installation
 
-**Local Agents Directory**:
-The `.claude/agents/` subdirectory of a project root. Contains agent files symlinked from the global agents store for use by that project.
-_Avoid_: installed agents directory, project agents
+**Installer**:
+The `install.sh` script at the repo root, fetched from GitHub and piped to bash. The only tool in the repo; everything else is Catalog content.
+_Avoid_: CLI, manager, tool
+
+**Store**:
+The local directory `~/.ai-tools/`, a full mirror of the Catalog refreshed on every Installer run. Wholly owned by the Installer — nothing else writes there — and disposable: edits made in the Store are lost on the next Update or Uninstall.
+_Avoid_: global store, repo clone
+
+**Install**:
+The act of symlinking an item from the Store into `~/.claude/skills/` or `~/.claude/agents/`, making it visible to Claude Code. Every Catalog item is in the Store; only Installed items are visible.
+_Avoid_: publish, link, add, sync
+
+**Update**:
+The act of refreshing the Store from the Catalog without changing any symlinks. Installed items update automatically through their symlinks; new Catalog items land in the Store without becoming Installed.
+_Avoid_: upgrade, sync, refresh
+
+**Uninstall**:
+The act of removing every `~/.claude` symlink that resolves into the Store, then deleting the Store itself. All-or-nothing; there is no per-item Uninstall.
+_Avoid_: remove, unlink, clean
+
+**Foreign Entry**:
+An entry in `~/.claude/skills/` or `~/.claude/agents/` that does not resolve into the Store (e.g. a skills.sh-managed symlink, or a real local directory). The Installer never touches Foreign Entries.
+_Avoid_: conflict, collision, external skill
+
+### Multi-agent skill roles
 
 **Orchestrator**:
 The main agent in a multi-agent skill that coordinates subagents, exercises judgment on their output, and decides when the result is acceptable.
@@ -70,18 +64,19 @@ _Avoid_: review, feedback, result
 
 ## Relationships
 
-- A **Skill** lives in exactly one location at a time: a **Project Skills Directory**, the **Global Store**, or a **Local Skills Directory**
-- An **Agent** lives in exactly one location at a time: a **Project Agents Directory**, the global agents store (`~/.claude/agents/`), or a **Local Agents Directory**
-- **Publish** moves a resource from a project source directory → global store (via symlink); applies to both skills and agents
-- **Install** moves a resource from the global store → a project local directory (via symlink); applies to both skills and agents
-- A **Project Root** contains at most one **Project Skills Directory**, one **Local Skills Directory**, one **Project Agents Directory**, and one **Local Agents Directory**
-- **Skills** are directories identified by a `SKILL.md` file; **Agents** are individual `.md` files
+- The **Catalog** is the repo; the **Store** is its local mirror; `~/.claude` symlinks into the Store define what is **Installed**
+- Content flows one way: Catalog → Store → `~/.claude` symlink. There is no publish flow back into the Catalog — content changes happen by editing the repo
+- Every Installer run (Install or **Update**) refreshes the whole Store, so all Installed items track the Catalog together — no version skew
+- A **Skill** is a directory; an **Agent** is a file. The Installer distinguishes them by shape, not by configuration
+- **Foreign Entries** and the Installer coexist in `~/.claude` but never interact
 
 ## Example dialogue
 
-> **Dev:** "I want to use the `teach-me` skill in my new project."
-> **Domain expert:** "First check if it's in your **global store** with `ai skills list`. If it's there, **install** it into your project with `ai skills install teach-me`. If it's not there yet, find the project that owns it and **publish** it first."
+> **Dev:** "I want the `teach-me` skill on my laptop."
+> **Domain expert:** "Run the **Installer** and pick it from the **Catalog**. The whole Catalog gets mirrored into your **Store**, and your pick is symlinked into `~/.claude/skills/`. Later, `--update` refreshes the Store and everything you've **Installed** comes along for free."
 
 ## Flagged ambiguities
 
-- "available" was used loosely to mean both **publishable** (in a project skills directory) and **installable** (in the global store) — resolved: these are distinct concepts with distinct flags.
+- "install" previously meant symlinking from `~/.claude` into a *project's* `.claude/skills/` — resolved: that project-scoped concept is gone; **Install** is now machine-scoped only
+- "subfolders" was used loosely for both skills and agents — resolved: **Skills** are directories, **Agents** are flat `.md` files
+- "available" — resolved: there is only one kind of availability now, presence in the **Catalog**

@@ -1,3 +1,0 @@
-# install source is always the global store
-
-`ai skills install` always sources skills from `~/.claude/skills/`. There is no `--from` flag to override the source. We removed the previous `--from` override because the global store is the canonical intermediary in the publish→install flow: a skill is published into the global store first, then installed from it into projects. Allowing install to source from an arbitrary directory would bypass this contract and create project-to-project dependencies that are invisible to the global store. If a skill needs to go from one project to another, the correct path is publish then install.
