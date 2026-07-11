@@ -5,10 +5,9 @@ description: Generates or refactors a project README to a standard quality bar. 
 
 # generate-readme
 
-Produce a README that meets the quality bar in the **Checklist** below. You do all of this
-yourself in a single pass — no subagents, no draft files. Read the sources, write or refactor
-the README directly, review your own work against the Checklist once, fix any gaps you find,
-then stop.
+Produce a README that meets the quality bar in the **Checklist** below, in a single pass. Read
+the sources, write or refactor the README directly, review your own work against the Checklist
+once, fix any gaps you find, then stop.
 
 ## Step 1 — Locate the repo and detect mode
 
@@ -90,9 +89,9 @@ Stop.
 
 ## Checklist
 
-Quality bar, grounded in a sampling of well-regarded READMEs (httpie, size-limit,
-shallow-backup, sindresorhus/awesome, nlohmann/json, Best-README-Template). See
-`docs/adr/0003-readme-guidelines-baked-into-skill.md` for the provenance.
+Quality bar, grounded in a sampling of well-regarded READMEs. This list is baked in rather
+than fetched at runtime — see `docs/skill-authoring.md` for why. Refresh it deliberately when
+it goes stale.
 
 ### Required (blocking if absent or inadequate)
 
