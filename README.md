@@ -49,7 +49,21 @@ curl -sSL https://raw.githubusercontent.com/pop-dog/ai-tools/mainline/install.sh
 - Anything in `~/.claude` that doesn't point into the store is a *foreign entry* and is never modified or removed.
 - The store is disposable: local edits to installed items live in `~/.ai-tools` and are overwritten on the next run. Durable changes belong in this repo.
 
-For the project vocabulary see [CONTEXT.md](CONTEXT.md); for design decisions see [docs/adr/](docs/adr/).
+### Flags
+
+| Flag | Applies to | Description |
+|------|-----------|-------------|
+| `--all` | publish, install, uninstall | Act on all available resources without prompting |
+| `--interactive` | publish, install, uninstall | Prompt before each resource |
+| `--from <project-root>` | publish, uninstall, list | Use this project as the source |
+| `--to <project-root>` | install, list | Use this project as the target |
+
+## Concepts
+
+- **Global store** — `~/.claude/skills/` and `~/.claude/agents/`. Resources here are available to install into any project.
+- **Publish** — symlink from a project's `skills/` or `agents/` directory into the global store.
+- **Install** — symlink from the global store into a project's `.claude/skills/` or `.claude/agents/` directory.
+- **Project root** — the `--from` and `--to` flags always point to a project root; `ai` resolves the correct subdirectory internally.
 
 ## Contributing
 
